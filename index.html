@@ -744,9 +744,11 @@ function _renderDashboardContent(el, lowStockItems) {
       total_transactions: filtered.length,
       cash_sales: filtered.filter(r => r.payment_method === 'cash').reduce((s, r) => s + (parseFloat(r.total) || 0), 0),
       qr_sales: filtered.filter(r => r.payment_method === 'qr').reduce((s, r) => s + (parseFloat(r.total) || 0), 0),
+      card_sales: filtered.filter(r => r.payment_method === 'card').reduce((s, r) => s + (parseFloat(r.total) || 0), 0),
     };
     const cashPercent = summary.total_sales > 0 ? Math.round((summary.cash_sales / summary.total_sales) * 100) : 0;
-    const qrPercent = summary.total_sales > 0 ? 100 - cashPercent : 0;
+    const qrPercent = summary.total_sales > 0 ? Math.round((summary.qr_sales / summary.total_sales) * 100) : 0;
+    const cardPercent = summary.total_sales > 0 ? Math.max(0, 100 - cashPercent - qrPercent) : 0;
 
     const filterLabel = _dashboardLocationFilter
       ? (APP.stockLocations.find(l => l.id === _dashboardLocationFilter)?.name || 'Unknown')
@@ -796,33 +798,44 @@ function _renderDashboardContent(el, lowStockItems) {
           <div style="height:10px;border-radius:5px;background:rgba(255,255,255,0.07);overflow:hidden;display:flex;">
             ${summary.total_sales > 0 ? `
               <div style="width:${cashPercent}%;background:linear-gradient(90deg,#27ae60,#2ecc71);transition:width 0.6s ease;${cashPercent > 0 ? 'min-width:4px;' : ''}"></div>
-              <div style="width:2px;background:var(--bg-primary);flex-shrink:0;"></div>
+              ${qrPercent > 0 || cardPercent > 0 ? '<div style="width:2px;background:var(--bg-primary);flex-shrink:0;"></div>' : ''}
               <div style="width:${qrPercent}%;background:linear-gradient(90deg,#7C6FFF,#9B8FFF);transition:width 0.6s ease;${qrPercent > 0 ? 'min-width:4px;' : ''}"></div>
+              ${cardPercent > 0 && qrPercent > 0 ? '<div style="width:2px;background:var(--bg-primary);flex-shrink:0;"></div>' : ''}
+              <div style="width:${cardPercent}%;background:linear-gradient(90deg,#e67e22,#f39c12);transition:width 0.6s ease;${cardPercent > 0 ? 'min-width:4px;' : ''}"></div>
             ` : `
               <div style="width:100%;background:rgba(255,255,255,0.04);"></div>
             `}
           </div>
         </div>
 
-        <!-- Cash & QR Cards -->
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <!-- Cash, QR & Card Cards -->
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
           <!-- Cash Card -->
-          <div style="background:rgba(39,174,96,0.08);border:1px solid rgba(39,174,96,0.2);border-radius:12px;padding:14px 12px;">
-            <div style="display:flex;align-items:center;gap:6px;margin-bottom:10px;">
-              <div style="width:8px;height:8px;border-radius:50%;background:#27ae60;box-shadow:0 0 6px rgba(39,174,96,0.4);"></div>
-              <span style="font-size:12px;color:var(--text-secondary);font-weight:600;">Cash</span>
-              <span style="font-size:11px;color:#2ecc71;font-weight:700;margin-left:auto;">${cashPercent}%</span>
+          <div style="background:rgba(39,174,96,0.08);border:1px solid rgba(39,174,96,0.2);border-radius:12px;padding:12px 10px;">
+            <div style="display:flex;align-items:center;gap:4px;margin-bottom:8px;">
+              <div style="width:7px;height:7px;border-radius:50%;background:#27ae60;box-shadow:0 0 6px rgba(39,174,96,0.4);"></div>
+              <span style="font-size:11px;color:var(--text-secondary);font-weight:600;">Cash</span>
+              <span style="font-size:10px;color:#2ecc71;font-weight:700;margin-left:auto;">${cashPercent}%</span>
             </div>
-            <div style="font-size:17px;font-weight:700;color:var(--text-primary);">${formatMoney(summary.cash_sales)}</div>
+            <div style="font-size:15px;font-weight:700;color:var(--text-primary);">${formatMoney(summary.cash_sales)}</div>
           </div>
           <!-- QR Card -->
-          <div style="background:rgba(124,111,255,0.08);border:1px solid rgba(124,111,255,0.2);border-radius:12px;padding:14px 12px;">
-            <div style="display:flex;align-items:center;gap:6px;margin-bottom:10px;">
-              <div style="width:8px;height:8px;border-radius:50%;background:#7C6FFF;box-shadow:0 0 6px rgba(124,111,255,0.4);"></div>
-              <span style="font-size:12px;color:var(--text-secondary);font-weight:600;">QR Transfer</span>
-              <span style="font-size:11px;color:#9B8FFF;font-weight:700;margin-left:auto;">${qrPercent}%</span>
+          <div style="background:rgba(124,111,255,0.08);border:1px solid rgba(124,111,255,0.2);border-radius:12px;padding:12px 10px;">
+            <div style="display:flex;align-items:center;gap:4px;margin-bottom:8px;">
+              <div style="width:7px;height:7px;border-radius:50%;background:#7C6FFF;box-shadow:0 0 6px rgba(124,111,255,0.4);"></div>
+              <span style="font-size:11px;color:var(--text-secondary);font-weight:600;">QR</span>
+              <span style="font-size:10px;color:#9B8FFF;font-weight:700;margin-left:auto;">${qrPercent}%</span>
             </div>
-            <div style="font-size:17px;font-weight:700;color:var(--text-primary);">${formatMoney(summary.qr_sales)}</div>
+            <div style="font-size:15px;font-weight:700;color:var(--text-primary);">${formatMoney(summary.qr_sales)}</div>
+          </div>
+          <!-- Credit Card -->
+          <div style="background:rgba(230,126,34,0.08);border:1px solid rgba(230,126,34,0.2);border-radius:12px;padding:12px 10px;">
+            <div style="display:flex;align-items:center;gap:4px;margin-bottom:8px;">
+              <div style="width:7px;height:7px;border-radius:50%;background:#e67e22;box-shadow:0 0 6px rgba(230,126,34,0.4);"></div>
+              <span style="font-size:11px;color:var(--text-secondary);font-weight:600;">Card</span>
+              <span style="font-size:10px;color:#f39c12;font-weight:700;margin-left:auto;">${cardPercent}%</span>
+            </div>
+            <div style="font-size:15px;font-weight:700;color:var(--text-primary);">${formatMoney(summary.card_sales)}</div>
           </div>
         </div>
       </div>
@@ -2168,7 +2181,7 @@ function renderReturnForm() {
         <span style="font-size:20px;font-weight:700;color:var(--warning);">${formatMoney(returnTotal)}</span>
       </div>
       <div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">
-        Refund via: ${returnState.sale.payment_method === 'cash' ? '💵 Cash' : '📱 Original payment method'}
+        Refund via: ${returnState.sale.payment_method === 'cash' ? '💵 Cash' : returnState.sale.payment_method === 'card' ? '💳 Credit Card' : '📱 QR Transfer'}
       </div>
     </div>
   `;
@@ -2889,12 +2902,14 @@ async function loadClosingData() {
     const totalSales = (sales || []).reduce((s, sale) => s + parseFloat(sale.total), 0);
     const cashSales = (sales || []).filter(s => s.payment_method === 'cash').reduce((s, sale) => s + parseFloat(sale.total), 0);
     const qrSales = (sales || []).filter(s => s.payment_method === 'qr').reduce((s, sale) => s + parseFloat(sale.total), 0);
+    const cardSales = (sales || []).filter(s => s.payment_method === 'card').reduce((s, sale) => s + parseFloat(sale.total), 0);
     const totalTransactions = (sales || []).length;
 
     closingState.data = {
       totalSales,
       cashSales,
       qrSales,
+      cardSales,
       totalTransactions,
       existingClosing,
     };
@@ -2986,6 +3001,10 @@ function renderClosingContent() {
         <div style="text-align:center;">
           <div style="font-size:11px;color:var(--text-secondary);margin-bottom:4px;">📱 QR Transfer</div>
           <div style="font-size:16px;font-weight:700;color:#9B8FFF;">${formatMoney(d.qrSales)}</div>
+        </div>
+        <div style="text-align:center;grid-column:1/-1;">
+          <div style="font-size:11px;color:var(--text-secondary);margin-bottom:4px;">💳 Credit Card</div>
+          <div style="font-size:16px;font-weight:700;color:#f39c12;">${formatMoney(d.cardSales)}</div>
         </div>
       </div>
     </div>
@@ -3110,6 +3129,7 @@ async function confirmDayClosing() {
       total_sales: d.totalSales,
       cash_sales: d.cashSales,
       qr_sales: d.qrSales,
+      card_sales: d.cardSales,
       total_transactions: d.totalTransactions,
       notes: closingState.notes || null,
     });
@@ -3173,6 +3193,10 @@ function showClosingSummary(data, actualCash, variance) {
         <div style="text-align:center;">
           <div style="font-size:11px;color:var(--text-secondary);margin-bottom:4px;">📱 QR Transfer</div>
           <div style="font-size:16px;font-weight:700;color:#9B8FFF;">${formatMoney(data.qrSales)}</div>
+        </div>
+        <div style="text-align:center;grid-column:1/-1;">
+          <div style="font-size:11px;color:var(--text-secondary);margin-bottom:4px;">💳 Credit Card</div>
+          <div style="font-size:16px;font-weight:700;color:#f39c12;">${formatMoney(data.cardSales)}</div>
         </div>
       </div>
 
@@ -3339,6 +3363,10 @@ function viewClosingDetail(c) {
           <div style="text-align:center;">
             <div style="font-size:11px;color:var(--text-secondary);margin-bottom:4px;">📱 QR Transfer</div>
             <div style="font-size:16px;font-weight:700;color:#9B8FFF;">${formatMoney(c.qr_sales)}</div>
+          </div>
+          <div style="text-align:center;grid-column:1/-1;">
+            <div style="font-size:11px;color:var(--text-secondary);margin-bottom:4px;">💳 Credit Card</div>
+            <div style="font-size:16px;font-weight:700;color:#f39c12;">${formatMoney(c.card_sales || 0)}</div>
           </div>
         </div>
       </div>
@@ -4790,6 +4818,7 @@ function renderSalesReportBody(sales, items, range) {
   var avgTx = txCount > 0 ? totalSales / txCount : 0;
   var cashTotal = sales.filter(function(s) { return s.payment_method === 'cash'; }).reduce(function(s, r) { return s + (parseFloat(r.total) || 0); }, 0);
   var qrTotal = sales.filter(function(s) { return s.payment_method === 'qr'; }).reduce(function(s, r) { return s + (parseFloat(r.total) || 0); }, 0);
+  var cardTotal = sales.filter(function(s) { return s.payment_method === 'card'; }).reduce(function(s, r) { return s + (parseFloat(r.total) || 0); }, 0);
 
   // Top products
   var productMap = {};
@@ -4829,6 +4858,7 @@ function renderSalesReportBody(sales, items, range) {
 
   var cashCount = sales.filter(function(s) { return s.payment_method === 'cash'; }).length;
   var qrCount = sales.filter(function(s) { return s.payment_method === 'qr'; }).length;
+  var cardCount = sales.filter(function(s) { return s.payment_method === 'card'; }).length;
 
   body.innerHTML =
     // Summary cards
@@ -4846,10 +4876,11 @@ function renderSalesReportBody(sales, items, range) {
         '<div style="font-size:20px;font-weight:700;">' + formatMoney(avgTx) + '</div>' +
       '</div>' +
       '<div class="card" style="padding:14px;border-radius:12px;">' +
-        '<div style="font-size:11px;color:var(--text-secondary);margin-bottom:4px;">Cash vs QR</div>' +
-        '<div style="font-size:13px;font-weight:600;">' +
+        '<div style="font-size:11px;color:var(--text-secondary);margin-bottom:4px;">By Payment</div>' +
+        '<div style="font-size:12px;font-weight:600;">' +
           '<span style="color:#4ade80;">💵 ' + formatMoney(cashTotal) + '</span><br>' +
-          '<span style="color:#60a5fa;">📱 ' + formatMoney(qrTotal) + '</span>' +
+          '<span style="color:#60a5fa;">📱 ' + formatMoney(qrTotal) + '</span><br>' +
+          '<span style="color:#fbbf24;">💳 ' + formatMoney(cardTotal) + '</span>' +
         '</div>' +
       '</div>' +
     '</div>' +
@@ -4915,7 +4946,7 @@ function renderSalesReportBody(sales, items, range) {
   // Render charts
   setTimeout(function() {
     renderDailySalesChart(dailyDisplayLabels, dailyValues);
-    renderPaymentChart(cashTotal, qrTotal);
+    renderPaymentChart(cashTotal, qrTotal, cardTotal);
   }, 100);
 }
 
@@ -4966,10 +4997,10 @@ function renderDailySalesChart(labels, values) {
   });
 }
 
-function renderPaymentChart(cashTotal, qrTotal) {
+function renderPaymentChart(cashTotal, qrTotal, cardTotal) {
   var canvas = $('report-payment-chart');
   if (!canvas) return;
-  if (cashTotal === 0 && qrTotal === 0) {
+  if (cashTotal === 0 && qrTotal === 0 && cardTotal === 0) {
     canvas.parentElement.innerHTML = '<div style="text-align:center;color:var(--text-secondary);font-size:12px;padding:20px;">No data</div>';
     return;
   }
@@ -4977,10 +5008,10 @@ function renderPaymentChart(cashTotal, qrTotal) {
   _reportCharts.payment = new Chart(ctx, {
     type: 'doughnut',
     data: {
-      labels: ['Cash', 'QR'],
+      labels: ['Cash', 'QR', 'Card'],
       datasets: [{
-        data: [cashTotal, qrTotal],
-        backgroundColor: ['#4ade80', '#60a5fa'],
+        data: [cashTotal, qrTotal, cardTotal],
+        backgroundColor: ['#4ade80', '#60a5fa', '#fbbf24'],
         borderWidth: 0,
         hoverOffset: 4
       }]
@@ -5063,6 +5094,7 @@ function exportSalesPDF() {
   var avgTx = txCount > 0 ? totalSales / txCount : 0;
   var cashTotal = sales.filter(function(s) { return s.payment_method === 'cash'; }).reduce(function(s, r) { return s + (parseFloat(r.total) || 0); }, 0);
   var qrTotal = sales.filter(function(s) { return s.payment_method === 'qr'; }).reduce(function(s, r) { return s + (parseFloat(r.total) || 0); }, 0);
+  var cardTotal = sales.filter(function(s) { return s.payment_method === 'card'; }).reduce(function(s, r) { return s + (parseFloat(r.total) || 0); }, 0);
 
   var range = _reportState._range;
   var fromStr = range ? new Date(range.from).toLocaleDateString('en-MY') : '';
@@ -5082,7 +5114,7 @@ function exportSalesPDF() {
   doc.text('Total Sales: RM ' + totalSales.toFixed(2), 14, 56);
   doc.text('Transactions: ' + txCount, 14, 62);
   doc.text('Avg/Transaction: RM ' + avgTx.toFixed(2), 14, 68);
-  doc.text('Cash: RM ' + cashTotal.toFixed(2) + '  |  QR: RM ' + qrTotal.toFixed(2), 14, 74);
+  doc.text('Cash: RM ' + cashTotal.toFixed(2) + '  |  QR: RM ' + qrTotal.toFixed(2) + '  |  Card: RM ' + cardTotal.toFixed(2), 14, 74);
 
   // Top products
   var productMap = {};
