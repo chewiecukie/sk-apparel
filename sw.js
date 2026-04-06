@@ -1,14 +1,15 @@
 // Service Worker for Sayyida Khadeeja Apparel PWA
 const CACHE_NAME = 'sk-apparel-v1';
 
-// App shell — files we control
+// App shell — files we control (relative to SW location for GitHub Pages compatibility)
+const BASE = self.location.pathname.replace(/sw\.js$/, '');
 const APP_SHELL = [
-  '/',
-  '/index.html',
-  '/manifest.json',
-  '/icons/icon-192x192.png',
-  '/icons/icon-512x512.png',
-  '/icons/apple-touch-icon.png'
+  BASE,
+  BASE + 'index.html',
+  BASE + 'manifest.json',
+  BASE + 'icons/icon-192x192.png',
+  BASE + 'icons/icon-512x512.png',
+  BASE + 'icons/apple-touch-icon.png'
 ];
 
 // CDN assets — third-party libraries (versioned, safe to cache long-term)
