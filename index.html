@@ -1283,7 +1283,7 @@ function openCheckoutModal() {
   checkoutState = {
     customerName: '',
     customerPhone: '',
-    branch: APP.stockLocations.find(l => l.id === APP.activePOSLocation)?.name || APP.settings.default_branch || '',
+    branch: APP.stockLocations.find(l => l.id === APP.activePOSLocation)?.name || '',
     paymentMethod: 'cash',
     cashReceived: '',
     discountType: null,
@@ -4494,7 +4494,7 @@ function renderMoreScreen() {
   // Build menu items based on role
   const items = [];
 
-  // Admin-only: Staff, Categories, Colors, Sizes, Locations, Store Settings
+  // Admin-only: Staff, Categories, Colors, Sizes, Locations, Receipt Settings
   if (hasRole('admin')) {
     items.push({ icon: '👤', label: 'Staff Management', desc: 'Manage staff accounts, roles & PINs', action: 'openStaffManagement()' });
   }
@@ -4505,7 +4505,7 @@ function renderMoreScreen() {
   }
   if (hasRole('admin')) {
     items.push({ icon: '📍', label: 'Locations', desc: `${APP.stockLocations.length} locations`, action: 'openLocationManagement()' });
-    items.push({ icon: '🏪', label: 'Store Settings', desc: 'Store name, branch, receipt footer', action: 'openStoreSettings()' });
+    items.push({ icon: '🧾', label: 'Receipt Settings', desc: 'Store name & receipt footer', action: 'openStoreSettings()' });
   }
 
   // Today's Sales: All roles
@@ -5792,19 +5792,18 @@ async function deleteLocation(locId) {
   await loadLocationList();
 }
 
-// ===================== STORE SETTINGS =====================
-let storeSettingsState = { default_branch: '', receipt_footer: '', store_name: '' };
+// ===================== RECEIPT SETTINGS =====================
+let storeSettingsState = { receipt_footer: '', store_name: '' };
 
 async function openStoreSettings() {
   storeSettingsState = {
-    default_branch: APP.settings.default_branch || '',
     receipt_footer: APP.settings.receipt_footer || 'Thank you for shopping with us!',
     store_name: APP.settings.store_name || 'Sayyida Khadeeja Apparel',
   };
 
   const html = `
     <div style="display:flex;align-items:center;justify-content:space-between;padding:16px;border-bottom:1px solid var(--border);flex-shrink:0;">
-      <h2 style="font-size:18px;font-weight:700;">🏪 Store Settings</h2>
+      <h2 style="font-size:18px;font-weight:700;">🧾 Receipt Settings</h2>
       <div style="cursor:pointer;padding:4px;width:32px;height:32px;display:flex;align-items:center;justify-content:center;border-radius:50%;background:var(--surface-highlight);" onclick="closeModal('settings-modal')">✕</div>
     </div>
     <div class="scrollable" style="flex:1;padding:16px;">
@@ -5812,9 +5811,9 @@ async function openStoreSettings() {
         <label style="font-size:13px;font-weight:600;color:var(--text-secondary);display:block;margin-bottom:6px;">Store Name</label>
         <input type="text" class="input" value="${storeSettingsState.store_name}" oninput="storeSettingsState.store_name=this.value">
       </div>
-      <div style="margin-bottom:16px;">
-        <label style="font-size:13px;font-weight:600;color:var(--text-secondary);display:block;margin-bottom:6px;">Default Branch</label>
-        <input type="text" class="input" placeholder="e.g. Main Store" value="${storeSettingsState.default_branch}" oninput="storeSettingsState.default_branch=this.value">
+      <div style="margin-bottom:16px;padding:10px;border-radius:8px;background:var(--surface-highlight);">
+        <div style="font-size:13px;font-weight:600;color:var(--text-secondary);margin-bottom:4px;">📍 Branch on Receipt</div>
+        <div style="font-size:12px;color:var(--text-secondary);">Automatically set from the POS location where the sale is made.</div>
       </div>
       <div style="margin-bottom:20px;">
         <label style="font-size:13px;font-weight:600;color:var(--text-secondary);display:block;margin-bottom:6px;">Receipt Footer Message</label>
@@ -5832,14 +5831,12 @@ async function saveStoreSettings() {
   try {
     const settings = [
       { key: 'store_name', value: JSON.stringify(storeSettingsState.store_name) },
-      { key: 'default_branch', value: JSON.stringify(storeSettingsState.default_branch) },
       { key: 'receipt_footer', value: JSON.stringify(storeSettingsState.receipt_footer) },
     ];
     for (const s of settings) {
       await db.from('app_settings').upsert({ key: s.key, value: JSON.parse(s.value), updated_at: new Date().toISOString() }, { onConflict: 'key' });
     }
     APP.settings.store_name = storeSettingsState.store_name;
-    APP.settings.default_branch = storeSettingsState.default_branch;
     APP.settings.receipt_footer = storeSettingsState.receipt_footer;
     closeModal('settings-modal');
     showToast('Settings saved!', 'success');
