@@ -3962,9 +3962,9 @@ async function renderProductsScreen() {
         <i data-lucide="plus" style="width:16px;height:16px;"></i> Add Product
       </button>` : '<span class="badge badge-info">View Only</span>'}
     </div>
-    <div class="scrollable-x" style="display:flex;gap:8px;padding-bottom:8px;">
-      <div class="chip ${APP.productsCategoryFilter === null ? 'active' : ''}" onclick="APP.productsCategoryFilter=null;renderProductsList();">All</div>
-      ${APP.categories.map(c => `<div class="chip ${APP.productsCategoryFilter === c.id ? 'active' : ''}" onclick="APP.productsCategoryFilter='${c.id}';renderProductsList();">${c.name}</div>`).join('')}
+    <div class="scrollable-x" id="products-category-chips" style="display:flex;gap:8px;padding-bottom:8px;">
+      <div class="chip ${APP.productsCategoryFilter === null ? 'active' : ''}" onclick="APP.productsCategoryFilter=null;renderProductsCategories();renderProductsList();">All</div>
+      ${APP.categories.map(c => `<div class="chip ${APP.productsCategoryFilter === c.id ? 'active' : ''}" onclick="APP.productsCategoryFilter='${c.id}';renderProductsCategories();renderProductsList();">${c.name}</div>`).join('')}
     </div>
   `;
   lucide.createIcons({ nameAttr: 'data-lucide' });
@@ -3972,6 +3972,15 @@ async function renderProductsScreen() {
   content.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;padding:40px;"><div class="spinner spinner-lg"></div></div>`;
   await loadProducts();
   renderProductsList();
+}
+
+function renderProductsCategories() {
+  const chipsContainer = document.getElementById('products-category-chips');
+  if (!chipsContainer) return;
+  chipsContainer.innerHTML = `
+    <div class="chip ${APP.productsCategoryFilter === null ? 'active' : ''}" onclick="APP.productsCategoryFilter=null;renderProductsCategories();renderProductsList();">All</div>
+    ${APP.categories.map(c => `<div class="chip ${APP.productsCategoryFilter === c.id ? 'active' : ''}" onclick="APP.productsCategoryFilter='${c.id}';renderProductsCategories();renderProductsList();">${c.name}</div>`).join('')}
+  `;
 }
 
 function renderProductsList() {
