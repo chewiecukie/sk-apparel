@@ -370,17 +370,18 @@ function getCartTotal() { return APP.cart.reduce((s, i) => s + (i.qty * i.unitPr
 
 // ===================== PERMISSION HELPERS =====================
 function hasRole(...roles) {
+  if (APP.currentStaff?.role === 'superadmin') return true; // Super Admin bypasses all
   return roles.includes(APP.currentStaff?.role);
 }
 
 function canAccessLocation(locationId) {
-  if (hasRole('admin')) return true;
+  if (hasRole('admin', 'superadmin')) return true;
   const assigned = APP.currentStaff?.assignedLocations || [];
   return assigned.includes(locationId);
 }
 
 function getAccessibleLocationIds() {
-  if (hasRole('admin')) return APP.stockLocations.map(l => l.id);
+  if (hasRole('admin', 'superadmin')) return APP.stockLocations.map(l => l.id);
   return APP.currentStaff?.assignedLocations || [];
 }
 
@@ -525,6 +526,7 @@ async function pinSubmit() {
       await loadProducts();
       await loadLocationStock();
       initRealtimeSync();
+      initPresence();
       navigate('home');
     } else {
       $('pin-error').textContent = 'Invalid PIN';
@@ -554,6 +556,7 @@ async function tryRestoreSession() {
 }
 
 function logout() {
+  cleanupPresence();
   cleanupSync();
   APP.currentStaff = null;
   APP.cart = [];
@@ -664,6 +667,7 @@ function renderBottomNav() {
 
 async function navigate(screen) {
   APP.currentScreen = screen;
+  updatePresenceScreen(screen);
   qsa('.screen').forEach(s => s.classList.remove('active'));
   const target = $('screen-' + screen);
   if (target) target.classList.add('active');
@@ -1870,7 +1874,7 @@ async function toggleSaleDetail(saleId) {
     const sale = saleRes.data;
     const items = itemsRes.data;
 
-    const isManagerOrAdmin = ['manager', 'admin'].includes(APP.currentStaff?.role);
+    const isManagerOrAdmin = ['manager', 'admin', 'superadmin'].includes(APP.currentStaff?.role);
     el.innerHTML = `
       ${sale?.customer_name ? `
       <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;padding:6px 10px;background:var(--surface-highlight);border-radius:8px;">
@@ -4077,7 +4081,7 @@ async function openProductModal(productId) {
 
 function renderProductFormModal() {
   const isEdit = !!productFormState.id;
-  const isAdmin = APP.currentStaff?.role === 'admin';
+  const isAdmin = APP.currentStaff?.role === 'admin' || APP.currentStaff?.role === 'superadmin';
   const variantCount = productFormState.selectedColors.length * productFormState.selectedSizes.length;
 
   const html = `
@@ -4530,6 +4534,11 @@ function renderMoreScreen() {
 
   // Build menu items based on role
   const items = [];
+
+  // Super Admin only: Live Users
+  if (APP.currentStaff?.role === 'superadmin') {
+    items.push({ icon: '📡', label: 'Live Users', desc: 'See who\'s online right now', action: 'openLiveUsers()' });
+  }
 
   // Admin-only: Staff, Categories, Colors, Sizes, Locations, Receipt Settings
   if (hasRole('admin')) {
@@ -5359,7 +5368,7 @@ async function openStaffManagement() {
     if (error) throw error;
     const list = $('staff-list');
     list.innerHTML = (data || []).map(s => {
-      const roleBadge = { admin: 'badge-danger', manager: 'badge-warning', accountant: 'badge-success', staff: 'badge-info' };
+      const roleBadge = { superadmin: 'badge-danger', admin: 'badge-danger', manager: 'badge-warning', accountant: 'badge-success', staff: 'badge-info' };
       return `
         <div class="card" style="margin-bottom:8px;padding:14px;display:flex;align-items:center;justify-content:space-between;">
           <div>
@@ -5437,6 +5446,7 @@ function renderStaffForm() {
           <option value="accountant" ${staffFormState.role === 'accountant' ? 'selected' : ''}>Accountant</option>
           <option value="manager" ${staffFormState.role === 'manager' ? 'selected' : ''}>Manager</option>
           <option value="admin" ${staffFormState.role === 'admin' ? 'selected' : ''}>Admin</option>
+          ${APP.currentStaff?.role === 'superadmin' ? `<option value="superadmin" ${staffFormState.role === 'superadmin' ? 'selected' : ''}>🛡️ Super Admin</option>` : ''}
         </select>
       </div>
       <div style="margin-bottom:20px;">
@@ -6021,6 +6031,152 @@ function cleanupSync() {
   updateSyncIndicator();
 }
 
+// ===================== PRESENCE SYSTEM (Live User Tracking) =====================
+let _presenceChannel = null;
+
+function initPresence() {
+  if (!APP.currentStaff) return;
+  if (_presenceChannel) { db.removeChannel(_presenceChannel); }
+  _presenceChannel = db.channel('app-presence', {
+    config: { presence: { key: APP.currentStaff.id } }
+  });
+
+  _presenceChannel
+    .on('presence', { event: 'sync' }, () => {
+      // If the live users modal is open, refresh it
+      if (document.getElementById('live-users-modal')) renderLiveUsersList();
+    })
+    .subscribe(async (status) => {
+      if (status === 'SUBSCRIBED') {
+        await _presenceChannel.track({
+          staff_id: APP.currentStaff.id,
+          name: APP.currentStaff.name,
+          role: APP.currentStaff.role,
+          screen: APP.currentScreen || 'home',
+          location: APP.activePOSLocation || null,
+          online_at: new Date().toISOString()
+        });
+      }
+    });
+}
+
+async function updatePresenceScreen(screen) {
+  if (!_presenceChannel || !APP.currentStaff) return;
+  try {
+    await _presenceChannel.track({
+      staff_id: APP.currentStaff.id,
+      name: APP.currentStaff.name,
+      role: APP.currentStaff.role,
+      screen: screen,
+      location: APP.activePOSLocation || null,
+      online_at: new Date().toISOString()
+    });
+  } catch (e) { /* ignore presence update errors */ }
+}
+
+function cleanupPresence() {
+  if (_presenceChannel) {
+    try { _presenceChannel.untrack(); } catch (e) { /* ignore */ }
+    db.removeChannel(_presenceChannel);
+    _presenceChannel = null;
+  }
+}
+
+// ===================== LIVE USERS MONITOR (Super Admin Only) =====================
+function openLiveUsers() {
+  if (APP.currentStaff?.role !== 'superadmin') { showToast('Access denied', 'warning'); return; }
+
+  const html = `
+    <div style="display:flex;align-items:center;gap:12px;padding:16px;border-bottom:1px solid var(--border);flex-shrink:0;">
+      <div style="cursor:pointer;padding:4px;width:32px;height:32px;display:flex;align-items:center;justify-content:center;border-radius:50%;background:var(--surface-highlight);" onclick="closeModal('live-users-modal')">
+        <i data-lucide="arrow-left" style="width:18px;height:18px;color:var(--text-primary);"></i>
+      </div>
+      <div style="flex:1;">
+        <h2 style="font-size:16px;font-weight:700;">📡 Live Users</h2>
+        <div style="font-size:11px;color:var(--text-secondary);">Real-time app traffic monitor</div>
+      </div>
+      <div id="live-users-count" style="background:var(--accent);color:#fff;font-size:12px;font-weight:700;padding:4px 10px;border-radius:20px;">0</div>
+    </div>
+    <div class="scrollable" style="flex:1;padding:16px;padding-bottom:calc(16px + var(--safe-bottom));" id="live-users-list">
+      <div style="display:flex;align-items:center;justify-content:center;padding:40px;"><div class="spinner"></div></div>
+    </div>
+  `;
+  openModal(html, 'fullscreen', 'live-users-modal');
+  lucide.createIcons({ nameAttr: 'data-lucide' });
+  renderLiveUsersList();
+}
+
+function renderLiveUsersList() {
+  const listEl = document.getElementById('live-users-list');
+  const countEl = document.getElementById('live-users-count');
+  if (!listEl || !_presenceChannel) return;
+
+  const presenceState = _presenceChannel.presenceState();
+  const users = [];
+
+  // Extract all online users from presence state
+  Object.keys(presenceState).forEach(key => {
+    const presences = presenceState[key];
+    if (presences && presences.length > 0) {
+      users.push(presences[0]); // Take the latest presence for each user
+    }
+  });
+
+  if (countEl) countEl.textContent = users.length;
+
+  if (users.length === 0) {
+    listEl.innerHTML = `
+      <div style="text-align:center;padding:40px;color:var(--text-secondary);">
+        <div style="font-size:36px;margin-bottom:12px;">👻</div>
+        <div>No users online right now</div>
+      </div>`;
+    return;
+  }
+
+  const screenLabels = { home: '🏠 Dashboard', pos: '🛒 POS', stock: '📦 Stock', products: '👕 Products', more: '⚙️ Settings' };
+  const roleBadge = { superadmin: 'badge-danger', admin: 'badge-danger', manager: 'badge-warning', accountant: 'badge-success', staff: 'badge-info' };
+  const roleLabels = { superadmin: '🛡️ Super Admin', admin: 'Admin', manager: 'Manager', accountant: 'Accountant', staff: 'Staff' };
+
+  // Sort: superadmin first, then admin, then others
+  const roleOrder = { superadmin: 0, admin: 1, manager: 2, accountant: 3, staff: 4 };
+  users.sort((a, b) => (roleOrder[a.role] || 5) - (roleOrder[b.role] || 5));
+
+  listEl.innerHTML = users.map(u => {
+    const locationName = APP.stockLocations.find(l => l.id === u.location)?.name || '—';
+    const onlineAt = u.online_at ? new Date(u.online_at) : null;
+    const timeAgo = onlineAt ? getTimeAgo(onlineAt) : '';
+    const isSelf = u.staff_id === APP.currentStaff?.id;
+
+    return `
+      <div class="card" style="margin-bottom:8px;padding:14px;display:flex;align-items:center;gap:12px;">
+        <div style="width:42px;height:42px;border-radius:50%;background:${isSelf ? 'var(--accent)' : 'var(--surface-highlight)'};display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+          <span style="font-size:18px;${isSelf ? 'filter:brightness(2);' : ''}">${isSelf ? '🛡️' : '👤'}</span>
+        </div>
+        <div style="flex:1;min-width:0;">
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+            <span style="font-size:14px;font-weight:600;">${u.name}</span>
+            ${isSelf ? '<span style="font-size:10px;color:var(--accent);font-weight:600;">(You)</span>' : ''}
+          </div>
+          <div style="display:flex;gap:6px;align-items:center;margin-top:4px;flex-wrap:wrap;">
+            <span class="badge ${roleBadge[u.role] || 'badge-info'}" style="font-size:10px;">${roleLabels[u.role] || u.role}</span>
+            <span style="font-size:11px;color:var(--text-secondary);">${screenLabels[u.screen] || u.screen || '—'}</span>
+          </div>
+          <div style="font-size:11px;color:var(--text-secondary);margin-top:4px;">
+            📍 ${locationName} • 🟢 Online ${timeAgo}
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function getTimeAgo(date) {
+  const diff = Math.floor((Date.now() - date.getTime()) / 1000);
+  if (diff < 60) return 'just now';
+  if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+  if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+  return Math.floor(diff / 86400) + 'd ago';
+}
+
 // ===================== APP INITIALIZATION =====================
 async function initApp() {
   initLogin();
@@ -6034,6 +6190,7 @@ async function initApp() {
     await loadProducts();
     await loadLocationStock();
     initRealtimeSync();
+    initPresence();
     navigate('home');
   }
 }
