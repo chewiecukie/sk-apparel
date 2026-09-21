@@ -2456,7 +2456,7 @@ async function exchangeStep2() {
   // Load products
   try {
     const { data: products, error } = await db.from('products')
-      .select('*, variants:product_variants(*), category:categories(name)')
+      .select('*, variants:product_variants(*, size:sizes(name), color:colors(name)), category:categories(name)')
       .eq('is_active', true)
       .order('name');
     if (error) throw error;
@@ -2498,16 +2498,18 @@ function renderExchangeStep2() {
     
     <div style="font-size:14px;font-weight:600;margin-bottom:10px;">Select replacement products:</div>
     ${exchangeState.products.map(p => 
-      (p.variants || []).filter(v => v.is_active !== false).map(v => `
+      (p.variants || []).filter(v => v.is_active !== false).map(v => {
+        const vLabel = [v.size?.name, v.color?.name].filter(Boolean).join(' / ') || 'Default';
+        return `
         <div class="card" style="padding:10px;margin-bottom:6px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;" 
-          onclick="addExchangeItem('${p.id}','${v.id}',\`${p.name.replace(/`/g, '')}\`,\`${v.label.replace(/`/g, '')}\`,${parseFloat(v.selling_price)})">
+          onclick="addExchangeItem('${p.id}','${v.id}',\`${p.name.replace(/\x60/g, '')}\`,\`${vLabel.replace(/\x60/g, '')}\`,${parseFloat(v.selling_price)})">
           <div>
             <div style="font-size:13px;font-weight:600;">${p.name}</div>
-            <div style="font-size:12px;color:var(--text-secondary);">${v.label} ${p.category?.name ? '• ' + p.category.name : ''}</div>
+            <div style="font-size:12px;color:var(--text-secondary);">${vLabel} ${p.category?.name ? '• ' + p.category.name : ''}</div>
           </div>
           <span style="font-size:14px;font-weight:700;color:var(--gold);">${formatMoney(v.selling_price)}</span>
         </div>
-      `).join('')
+      `}).join('')
     ).join('')}
     
     <div class="card" style="padding:14px;margin-top:16px;background:var(--surface-highlight);position:sticky;bottom:0;">
