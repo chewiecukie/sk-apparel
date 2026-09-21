@@ -1,5 +1,5 @@
 // Service Worker for Sayyida Khadeeja Apparel PWA
-const CACHE_NAME = 'sk-apparel-v1';
+const CACHE_NAME = 'sk-apparel-v2';
 
 // App shell — files we control (relative to SW location for GitHub Pages compatibility)
 const BASE = self.location.pathname.replace(/sw\.js$/, '');
